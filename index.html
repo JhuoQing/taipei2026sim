@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>決戰台北：第一人稱選戰模擬 - 記者會現場 (M1)</title>
+  <meta name="description" content="第一人稱視角台北市長選戰模擬遊戲。親臨記者會面對閃光燈與尖銳追問！">
+  <style>
+    /* ============================================================
+       0. 糖果色調與設計變數 (§8 色票規範)
+       ============================================================ */
+    :root {
+      --bg-cream: #FFF3E2;
+      --ink-dark: #5A3E36;
+      --pink: #FF8FA8;
+      --mint: #6FD3B1;
+      --sky: #78BDF2;
+      --butter: #FFD36B;
+      --lavender: #D3C1F2;
+      --alert-red: #FF6584;
+      --pure-white: #FFFFFF;
+      --shadow-soft: 0 8px 24px rgba(90, 62, 54, 0.12);
+      --font-stack: "Chiron GoRound TC", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+      --font-scale: 1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #2b1f1d;
+      color: var(--ink-dark);
+      font-family: var(--font-stack);
+      font-size: calc(16px * var(--font-scale));
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* 遊戲主視窗外框 (響應式手機/桌機) */
+    #viewport-container {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      max-width: 480px;
+      max-height: 920px;
+      background: var(--bg-cream);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+    }
+
+    @media (min-width: 481px) {
+      #viewport-container {
+        border-radius: 28px;
+        height: 95vh;
+        border: 4px solid var(--ink-dark);
+      }
+    }
+
+    /* ============================================================
+       1. 第一人稱 3D 舞台與環境層 (The POV Stage)
+       ============================================================ */
+    #stage-world {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+      background: linear-gradient(180deg, #F9E2C7 0%, #DCC4AC 100%);
+      perspective: 800px;
+      transform-style: preserve-3d;
+    }
+
+    /* 鏡頭晃動與呼吸容器 */
+    #camera-rig {
+      position: absolute;
+      inset: 0;
+      transform-origin: center bottom;
+      transition: transform 0.1s ease-out;
+    }
+
+    .camera-breathing {
+      animation: cameraBreathe 4.5s ease-in-out infinite alternate;
+    }
+
+    @keyframes cameraBreathe {
+      0% { transform: translateY(0px) rotate(0deg); }
+      50% { transform: translateY(-3px) rotate(0.4deg); }
+      100% { transform: translateY(2px) rotate(-0.3deg); }
+    }
+
+    .camera-shake {
+      animation: cameraShock 0.45s cubic-bezier(.36,.07,.19,.97) both;
+    }
+
+    @keyframes cameraShock {
+      10%, 90% { transform: translate3d(-2px, 2px, 0) rotate(-0.8deg); }
+      20%, 80% { transform: translate3d(3px, -2px, 0) rotate(0.8deg); }
+      30%, 50%, 70% { transform: translate3d(-3px, -1px, 0) rotate(-0.5deg); }
+      40%, 60% { transform: translate3d(3px, 1px, 0) rotate(0.5deg); }
+    }
+
+    /* 背景：競選看板與標語 */
+    .backdrop-wall {
+      position: absolute;
+      top: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      background: var(--pure-white);
+      border: 3px solid var(--ink-dark);
+      border-radius: 16px;
+      padding: 10px 16px;
+      text-align: center;
+      box-shadow: 0 4px 0 var(--ink-dark);
+      z-index: 1;
+    }
+    .backdrop-title {
+      font-size: 1.1rem;
+      font-weight: 900;
+      color: var(--pink);
+      letter-spacing: 1px;
+    }
+    .backdrop-sub {
+      font-size: 0.72rem;
+      color: #8C6D65;
+      font-weight: bold;
+    }
+
+    /* 中景：記者人群剪影與吉祥物記者 */
+    #press-crowd {
+      position: absolute;
+      bottom: 110px;
+      left: 0;
+      width: 100%;
+      height: 220px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .reporter-character {
+      position: absolute;
+      bottom: 0;
+      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .reporter-character.active {
+      transform: translateY(-24px) scale(1.15);
+      z-index: 10;
+    }
+
+    .speech-bubble {
+      background: var(--pure-white);
+      border: 2px solid var(--ink-dark);
+      border-radius: 12px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      white-space: nowrap;
+      box-shadow: 0 3px 0 var(--ink-dark);
+      margin-bottom: 6px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all 0.3s ease;
+    }
+    .reporter-character.active .speech-bubble {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* 攝影機吊桿麥克風 */
+    .boom-mic {
+      position: absolute;
+      top: 35px;
+      right: 15px;
+      width: 140px;
+      height: 90px;
+      pointer-events: none;
+      z-index: 4;
+      transform-origin: top right;
+      animation: boomSway 6s ease-in-out infinite alternate;
+    }
+    @keyframes boomSway {
+      0% { transform: rotate(-3deg); }
+      100% { transform: rotate(5deg); }
+    }
+
+    /* 前景：講台與候選人視角 (POV Podium) */
+    #podium-foreground {
+      position: absolute;
+      bottom: -15px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 110%;
+      height: 145px;
+      background: #E8D3BC;
+      border: 4px solid var(--ink-dark);
+      border-radius: 40px 40px 0 0;
+      z-index: 5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      box-shadow: inset 0 8px 0 rgba(255,255,255,0.4), 0 -8px 20px rgba(0,0,0,0.15);
+    }
+
+    .podium-logo {
+      margin-top: 10px;
+      background: var(--butter);
+      border: 2.5px solid var(--ink-dark);
+      padding: 3px 18px;
+      border-radius: 20px;
+      font-weight: 900;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      box-shadow: 0 3px 0 var(--ink-dark);
+    }
+
+    .podium-mics {
+      position: absolute;
+      top: -38px;
+      display: flex;
+      gap: 28px;
+    }
+    .mic-icon {
+      width: 16px;
+      height: 38px;
+      background: #4A4A4A;
+      border: 2.5px solid var(--ink-dark);
+      border-radius: 8px 8px 3px 3px;
+      position: relative;
+    }
+    .mic-icon::after {
+      content: '';
+      position: absolute;
+      bottom: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+      height: 16px;
+      background: var(--ink-dark);
+    }
+    .mic-foam-pink { background: var(--pink); }
+    .mic-foam-sky { background: var(--sky); }
+    .mic-foam-mint { background: var(--mint); }
+
+    /* 兔兔候選人的小肉球手（視角沉浸） */
+    .candidate-paw {
+      position: absolute;
+      bottom: 20px;
+      width: 44px;
+      height: 32px;
+      background: var(--pure-white);
+      border: 3px solid var(--ink-dark);
+      border-radius: 18px;
+      box-shadow: 0 4px 0 var(--ink-dark);
+    }
+    .paw-left { left: 45px; transform: rotate(18deg); }
+    .paw-right { right: 45px; transform: rotate(-18deg); }
+
+    /* 閃光燈特效層 */
+    #flash-overlay {
+      position: absolute;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 100;
+      transition: opacity 0.08s ease-out;
+    }
+
+    /* ============================================================
+       2. 儀表板與狀態條 (HUD)
+       ============================================================ */
+    #hud-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+      pointer-events: none;
+    }
+
+    .stat-pill {
+      pointer-events: auto;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+      border: 2px solid var(--ink-dark);
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 3px 0 var(--ink-dark);
+    }
+
+    .pill-stress {
+      color: var(--alert-red);
+    }
+
+    .btn-icon {
+      pointer-events: auto;
+      background: var(--pure-white);
+      border: 2px solid var(--ink-dark);
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.95rem;
+      box-shadow: 0 3px 0 var(--ink-dark);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    .btn-icon:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 var(--ink-dark);
+    }
+
+    /* ============================================================
+       3. 記者提問與互動卡片層 (Dialogue & Answer Area)
+       ============================================================ */
+    #interaction-dock {
+      background: var(--pure-white);
+      border-top: 4px solid var(--ink-dark);
+      padding: 14px 16px;
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 -8px 24px rgba(90,62,54,0.08);
+      max-height: 48%;
+      overflow-y: auto;
+    }
+
+    /* 記者資訊卡 */
+    .reporter-badge-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .reporter-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .reporter-tag {
+      font-size: 0.7rem;
+      font-weight: 900;
+      padding: 2px 8px;
+      border-radius: 8px;
+      border: 1.5px solid var(--ink-dark);
+    }
+    .tag-fox { background: var(--pink); color: #fff; }
+    .tag-dog { background: var(--butter); color: var(--ink-dark); }
+    .tag-cat { background: var(--mint); color: var(--ink-dark); }
+    .tag-owl { background: var(--lavender); color: var(--ink-dark); }
+
+    .timer-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      font-weight: 900;
+    }
+    .timer-bar-bg {
+      width: 80px;
+      height: 8px;
+      background: #E8D3BC;
+      border-radius: 4px;
+      border: 1.5px solid var(--ink-dark);
+      overflow: hidden;
+    }
+    #timer-bar {
+      width: 100%;
+      height: 100%;
+      background: var(--mint);
+      transition: width 0.1s linear, background-color 0.3s;
+    }
+
+    /* 提問打字機文字框 */
+    #question-card {
+      background: var(--bg-cream);
+      border: 2.5px solid var(--ink-dark);
+      border-radius: 14px;
+      padding: 10px 14px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      line-height: 1.45;
+      min-height: 62px;
+      position: relative;
+    }
+    .followup-alert {
+      display: inline-block;
+      background: var(--alert-red);
+      color: white;
+      font-size: 0.68rem;
+      font-weight: 900;
+      padding: 1px 6px;
+      border-radius: 6px;
+      margin-right: 6px;
+      vertical-align: middle;
+      animation: pulseAlert 1.2s infinite;
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(0.96); }
+    }
+
+    /* 選項列表 */
+    #answers-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .answer-btn {
+      background: var(--pure-white);
+      border: 2.5px solid var(--ink-dark);
+      border-radius: 14px;
+      padding: 9px 12px;
+      text-align: left;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--ink-dark);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 0 var(--ink-dark);
+      transition: transform 0.08s, box-shadow 0.08s, background-color 0.1s;
+    }
+    .answer-btn:active {
+      transform: translateY(3px);
+      box-shadow: 0 1px 0 var(--ink-dark);
+    }
+    .answer-btn:hover {
+      background-color: #FFF9F0;
+    }
+
+    .answer-tone {
+      font-size: 0.68rem;
+      font-weight: 900;
+      padding: 2px 6px;
+      border-radius: 6px;
+      white-space: nowrap;
+      border: 1px solid var(--ink-dark);
+    }
+    .tone-safe { background: var(--sky); }
+    .tone-bold { background: var(--alert-red); color: white; }
+    .tone-data { background: var(--lavender); }
+    .tone-warm { background: var(--butter); }
+
+    /* ============================================================
+       4. 彈窗與結算面板 (Settings, Result, Promises)
+       ============================================================ */
+    .modal-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(43, 31, 29, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 200;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 16px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--bg-cream);
+      border: 3.5px solid var(--ink-dark);
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: 0 10px 0 var(--ink-dark);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      max-height: 85vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      font-size: 1.15rem;
+      font-weight: 900;
+      text-align: center;
+      color: var(--ink-dark);
+    }
+
+    .setting-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1.5px dashed #DCC4AC;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .primary-btn {
+      background: var(--mint);
+      border: 2.5px solid var(--ink-dark);
+      padding: 10px;
+      border-radius: 14px;
+      font-weight: 900;
+      font-size: 0.95rem;
+      color: var(--ink-dark);
+      cursor: pointer;
+      box-shadow: 0 4px 0 var(--ink-dark);
+      text-align: center;
+    }
+    .primary-btn:active {
+      transform: translateY(2px);
+      box-shadow: 0 2px 0 var(--ink-dark);
+    }
+
+    /* 承諾翻舊帳醒目提示動畫 */
+    .ledger-badge {
+      background: var(--alert-red);
+      color: white;
+      padding: 2px 7px;
+      border-radius: 12px;
+      font-size: 0.7rem;
+      font-weight: 900;
+    }
+
+    /* 減少動態開關模式 */
+    body.reduce-motion * {
+      animation: none !important;
+      transition: none !important;
+    }
+  </style>
+</head>
+<body>
+
+<div id="viewport-container">
+
+  <!-- HUD 狀態欄 -->
+  <header id="hud-top">
+    <div class="stat-pill" title="市民信任度">
+      <span>🤝 信任</span>
+      <span id="stat-trust">51</span>
+    </div>
+    <div class="stat-pill" title="媒體聲量氣勢">
+      <span>🔥 聲量</span>
+      <span id="stat-fame">46</span>
+    </div>
+    <div class="stat-pill pill-stress" title="候選人心理壓力">
+      <span>💓 壓力</span>
+      <span id="stat-stress">20%</span>
+    </div>
+    <button class="btn-icon" id="btn-promises" title="已立承諾清單">📜</button>
+    <button class="btn-icon" id="btn-settings" title="系統設定">⚙️</button>
+  </header>
+
+  <!-- 3D 第一人稱視野舞台 -->
+  <main id="stage-world">
+    <div id="flash-overlay"></div>
+
+    <div id="camera-rig" class="camera-breathing">
+      <!-- 競選總部講台背板 -->
+      <div class="backdrop-wall">
+        <div class="backdrop-title">🥕 2026 台北新希望 兔兔競選總部</div>
+        <div class="backdrop-sub">市政政策發表記者會 • 現場直播中</div>
+      </div>
+
+      <!-- 吊桿麥克風 -->
+      <svg class="boom-mic" viewBox="0 0 140 90">
+        <line x1="140" y1="0" x2="20" y2="70" stroke="#5A3E36" stroke-width="4" stroke-linecap="round"/>
+        <rect x="10" y="65" width="22" height="12" rx="4" fill="#333" stroke="#5A3E36" stroke-width="2"/>
+      </svg>
+
+      <!-- 記者群 (SVG 原創吉祥物剪影) -->
+      <div id="press-crowd">
+        <!-- 狐狸記者 (左) -->
+        <div class="reporter-character" id="char-fox" style="left: 6%;">
+          <div class="speech-bubble">財源在哪？</div>
+          <svg width="68" height="68" viewBox="0 0 80 80">
+            <!-- 狐狸頭部 -->
+            <polygon points="12,16 28,34 8,42" fill="#FF8FA8" stroke="#5A3E36" stroke-width="3"/>
+            <polygon points="68,16 52,34 72,42" fill="#FF8FA8" stroke="#5A3E36" stroke-width="3"/>
+            <ellipse cx="40" cy="50" rx="28" ry="24" fill="#FFB4C5" stroke="#5A3E36" stroke-width="3"/>
+            <ellipse cx="40" cy="58" rx="14" ry="12" fill="#FFF" stroke="#5A3E36" stroke-width="2"/>
+            <circle cx="30" cy="46" r="3" fill="#5A3E36"/>
+            <circle cx="50" cy="46" r="3" fill="#5A3E36"/>
+            <polygon points="38,54 42,54 40,58" fill="#5A3E36"/>
+          </svg>
+        </div>
+
+        <!-- 柴犬特派員 (中左) -->
+        <div class="reporter-character active" id="char-dog" style="left: 31%;">
+          <div class="speech-bubble">請說清楚！</div>
+          <svg width="74" height="74" viewBox="0 0 80 80">
+            <!-- 柴犬頭部 -->
+            <polygon points="16,14 30,30 12,38" fill="#FFD36B" stroke="#5A3E36" stroke-width="3"/>
+            <polygon points="64,14 50,30 68,38" fill="#FFD36B" stroke="#5A3E36" stroke-width="3"/>
+            <ellipse cx="40" cy="48" rx="28" ry="24" fill="#FFD36B" stroke="#5A3E36" stroke-width="3"/>
+            <ellipse cx="40" cy="54" rx="16" ry="14" fill="#FFF" stroke="#5A3E36" stroke-width="2"/>
+            <ellipse cx="28" cy="38" rx="4" ry="3" fill="#FFF"/>
+            <ellipse cx="52" cy="38" rx="4" ry="3" fill="#FFF"/>
+            <circle cx="30" cy="46" r="3.5" fill="#5A3E36"/>
+            <circle cx="50" cy="46" r="3.5" fill="#5A3E36"/>
+            <ellipse cx="40" cy="54" rx="4" ry="3" fill="#5A3E36"/>
+          </svg>
+        </div>
+
+        <!-- 三花貓記者 (中右) -->
+        <div class="reporter-character" id="char-cat" style="left: 58%;">
+          <div class="speech-bubble">那托育呢？</div>
+          <svg width="68" height="68" viewBox="0 0 80 80">
+            <!-- 貓咪頭部 -->
+            <polygon points="14,16 28,34 10,38" fill="#6FD3B1" stroke="#5A3E36" stroke-width="3"/>
+            <polygon points="66,16 52,34 70,38" fill="#6FD3B1" stroke="#5A3E36" stroke-width="3"/>
+            <circle cx="40" cy="48" r="26" fill="#E8F8F2" stroke="#5A3E36" stroke-width="3"/>
+            <circle cx="30" cy="46" r="3" fill="#5A3E36"/>
+            <circle cx="50" cy="46" r="3" fill="#5A3E36"/>
+            <polygon points="38,52 42,52 40,55" fill="#5A3E36"/>
+          </svg>
+        </div>
+
+        <!-- 貓頭鷹事實查核員 (右) -->
+        <div class="reporter-character" id="char-owl" style="left: 78%;">
+          <div class="speech-bubble">數據有誤！</div>
+          <svg width="66" height="66" viewBox="0 0 80 80">
+            <!-- 貓頭鷹頭部 -->
+            <ellipse cx="40" cy="48" rx="26" ry="24" fill="#D3C1F2" stroke="#5A3E36" stroke-width="3"/>
+            <circle cx="30" cy="46" r="9" fill="#FFF" stroke="#5A3E36" stroke-width="2"/>
+            <circle cx="50" cy="46" r="9" fill="#FFF" stroke="#5A3E36" stroke-width="2"/>
+            <circle cx="30" cy="46" r="4" fill="#5A3E36"/>
+            <circle cx="50" cy="46" r="4" fill="#5A3E36"/>
+            <polygon points="37,53 43,53 40,60" fill="#FFD36B" stroke="#5A3E36" stroke-width="1.5"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 講台與第一人稱手部視角 -->
+      <div id="podium-foreground">
+        <div class="podium-mics">
+          <div class="mic-icon mic-foam-pink" title="市政聯播網"></div>
+          <div class="mic-icon mic-foam-sky" title="都會即時新聞"></div>
+          <div class="mic-icon mic-foam-mint" title="公民監督電台"></div>
+        </div>
+        <div class="podium-logo">TAIPEI 2026</div>
+
+        <!-- 玩家（白兔）的小萌爪握著講台兩側 -->
+        <div class="candidate-paw paw-left"></div>
+        <div class="candidate-paw paw-right"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 底部互動控制台 (記者提問與答題區) -->
+  <footer id="interaction-dock">
+    <div class="reporter-badge-row">
+      <div class="reporter-meta">
+        <span class="reporter-tag tag-dog" id="reporter-tag">柴小汪 • 追問型</span>
+        <span style="font-size:0.75rem; color:#8C6D65;" id="question-index">問題 1 / 5</span>
+      </div>
+      <div class="timer-wrap">
+        <span>⏳</span>
+        <div class="timer-bar-bg">
+          <div id="timer-bar"></div>
+        </div>
+        <span id="timer-text" style="width:20px; text-align:right;">12</span>
+      </div>
+    </div>
+
+    <!-- 提問打字機文字區 -->
+    <div id="question-card">
+      <span id="question-prefix"></span>
+      <span id="question-body">記者正在整隊準備提問...</span>
+    </div>
+
+    <!-- 選項區 -->
+    <div id="answers-grid">
+      <!-- 由 JS 動態注入按鈕 -->
+    </div>
+  </footer>
+
+  <!-- 承諾清單彈窗 -->
+  <div class="modal-overlay" id="modal-promises">
+    <div class="modal-card">
+      <div class="modal-title">📋 記者會已立下的政見支票</div>
+      <div style="font-size:0.8rem; color:#666;">注意：說出口的話會被媒體記錄。若被追問未兌現或矛盾之處，將大幅扣除信任度！</div>
+      <div id="promises-list" style="display:flex; flex-direction:column; gap:8px; min-height:80px; max-height:220px; overflow-y:auto;">
+        <!-- 動態渲染承諾 -->
+      </div>
+      <button class="primary-btn" onclick="toggleModal('modal-promises', false)">回到發言台</button>
+    </div>
+  </div>
+
+  <!-- 設定與選配 API 彈窗 -->
+  <div class="modal-overlay" id="modal-settings">
+    <div class="modal-card">
+      <div class="modal-title">⚙️ 遊戲與系統設定</div>
+      
+      <div class="setting-item">
+        <span>🔊 音效開關 (Web Audio)</span>
+        <input type="checkbox" id="cfg-audio" checked style="width:20px; height:20px;">
+      </div>
+
+      <div class="setting-item">
+        <span>🌿 減少動態效果 (無眩光)</span>
+        <input type="checkbox" id="cfg-motion" style="width:20px; height:20px;">
+      </div>
+
+      <div class="setting-item">
+        <span>🔍 放大字級</span>
+        <input type="checkbox" id="cfg-large-text" style="width:20px; height:20px;">
+      </div>
+
+      <div style="margin-top:10px; border-top:2px dashed #DCC4AC; padding-top:10px;">
+        <div style="font-size:0.85rem; font-weight:900; margin-bottom:4px;">🤖 選配 LLM 自由答題 API (BYOK)</div>
+        <div style="font-size:0.72rem; color:#A23939; line-height:1.3; margin-bottom:6px;">
+          ⚠️ 資安提醒：金鑰只保存在本分頁記憶體（sessionStorage），絕不上傳伺服器。若不使用，系統將自動以本機語義規則庫評分。
+        </div>
+        <input type="password" id="cfg-apikey" placeholder="sk-..." style="width:100%; padding:6px 10px; border:2px solid var(--ink-dark); border-radius:8px; font-size:0.8rem; margin-bottom:6px;">
+        <input type="text" id="cfg-apiendpoint" placeholder="https://api.openai.com/v1" style="width:100%; padding:6px 10px; border:2px solid var(--ink-dark); border-radius:8px; font-size:0.8rem;">
+      </div>
+
+      <button class="primary-btn" onclick="saveSettings()">儲存並關閉</button>
+    </div>
+  </div>
+
+  <!-- 記者會結算面板 -->
+  <div class="modal-overlay" id="modal-summary">
+    <div class="modal-card" style="text-align:center;">
+      <div style="font-size:2.4rem;" id="summary-badge">🎖️</div>
+      <div class="modal-title" id="summary-grade">記者會評價：A 級表現</div>
+      <div id="summary-desc" style="font-size:0.88rem; line-height:1.5; color:#5A3E36;"></div>
+      
+      <div style="background:#FFF; border:2px solid var(--ink-dark); border-radius:12px; padding:10px; display:flex; justify-content:space-around; margin:10px 0;">
+        <div>🤝 最終信任：<b id="sum-trust">51</b></div>
+        <div>🔥 聲量指數：<b id="sum-fame">46</b></div>
+      </div>
+
+      <button class="primary-btn" onclick="restartPressConference()">再戰一場記者會</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============================================================
+     5. 遊戲邏輯與題庫系統
+     ============================================================ -->
+<script>
+/**
+ * 決戰台北 M1 記者會資料庫
+ * 涵蓋 6 大議題與 12 區代表性事件，並配置追問與支票標記
+ */
+const QUESTION_BANK = [
+  {
+    id: "q_transit_free",
+    reporter: { name: "林小狐", outlet: "都會早報", style: "尖銳批判型", tagClass: "tag-fox", charId: "char-fox" },
+    text: "對手批評你提出的『台北林蔭公車免費試辦』是討好選民、債留子孫，你打算從哪裡挖預算？",
+    answers: [
+      {
+        text: "先縮減低效益的宣傳標案，分階段在內湖與大安試辦，嚴格控管財政。",
+        tone: "專業務實", toneClass: "tone-safe",
+        effect: { trust: 4, fame: 2, stress: -5 }
+      },
+      {
+        text: "市民福祉第一！我保證任內絕不加稅，三年內全線免費開跑！",
+        tone: "強勢承諾", toneClass: "tone-bold",
+        effect: { trust: -3, fame: 8, stress: 15 },
+        createsPromise: "三年內全線公車免費且絕不加稅"
+      },
+      {
+        text: "依據現有預算審查，公車補助每年缺口約 12 億，需採排富與尖峰差別費率補足。",
+        tone: "數據事實", toneClass: "tone-data",
+        effect: { trust: 5, fame: -1, stress: -5 }
+      },
+      {
+        text: "許多長輩與通勤族每天擠公車非常辛苦，政策的溫度不能只用冷冰冰的數字衡量。",
+        tone: "同理溫情", toneClass: "tone-warm",
+        effect: { trust: 2, fame: 4, stress: -2 }
+      }
+    ],
+    // 若立下該承諾，觸發的專屬追問
+    followUp: {
+      triggerPromise: "三年內全線公車免費且絕不加稅",
+      reporter: { name: "貓頭鷹博士", outlet: "公民事實查核", style: "追問型", tagClass: "tag-owl", charId: "char-owl" },
+      text: "【追問反咬】候選人！你剛才誇口『三年全線免費且不加稅』，交通局明年度自籌財源已見底，你不加稅到底要排擠哪筆社福預算？！",
+      answers: [
+        {
+          text: "呃...我們會擴大民間促參與捷運聯開商場租金回饋，細節由專業幕僚研擬中。",
+          tone: "退縮辯解", toneClass: "tone-safe",
+          effect: { trust: -6, fame: -2, stress: 20 }
+        },
+        {
+          text: "我說到做到！如果預算編不出來，我將捐出市長全額薪資負起政治責任！",
+          tone: "極限賭博", toneClass: "tone-bold",
+          effect: { trust: -2, fame: 10, stress: 30 },
+          createsPromise: "生不出公車預算就捐出全額市長薪水"
+        }
+      ]
+    }
+  },
+  {
+    id: "q_housing_youth",
+    reporter: { name: "貓秘書", outlet: "市民生活週報", style: "溫和民生型", tagClass: "tag-cat", charId: "char-cat" },
+    text: "台北租屋族已超過 35 萬人，萬華與大同區許多年輕人抱怨社宅中籤率不到 5%，市長上任第一年能為無殼族做什麼？",
+    answers: [
+      {
+        text: "盤點公有閒置校舍與老舊公有市場高樓層，改建為青年孵化基地與包租代管青年房。",
+        tone: "具體規劃", toneClass: "tone-safe",
+        effect: { trust: 4, fame: 3, stress: -4 }
+      },
+      {
+        text: "我承諾四年內蓋滿兩萬戶青年社宅，中籤率不翻倍我就不連任！",
+        tone: "狂開支票", toneClass: "tone-bold",
+        effect: { trust: -4, fame: 9, stress: 20 },
+        createsPromise: "四年蓋滿兩萬戶社宅否則不連任"
+      },
+      {
+        text: "現行補貼大多被房東吸收，應推動租屋實價登錄與房東免稅透明化，徹底導正租賃市場。",
+        tone: "市場改革", toneClass: "tone-data",
+        effect: { trust: 5, fame: 2, stress: -2 }
+      },
+      {
+        text: "我也是苦過來的青年，我完全體會租屋族下雨天看房的無奈，我們一定會做年輕人的後盾。",
+        tone: "情感共鳴", toneClass: "tone-warm",
+        effect: { trust: 3, fame: 5, stress: -5 }
+      }
+    ]
+  },
+  {
+    id: "q_neihu_traffic",
+    reporter: { name: "柴小汪", outlet: "台北新政快訊", style: "追問型", tagClass: "tag-dog", charId: "char-dog" },
+    text: "歷任市長都誓言解決內湖塞車問題卻通通跳票！你提出的『水上接駁與彈性分流』被科技園區工程師酸是在觀光嗎？",
+    answers: [
+      {
+        text: "水運是離峰輔助，核心在於加速捷運東環段地下潛盾作業，並協同南軟科技業試辦分流時段。",
+        tone: "客觀釐清", toneClass: "tone-safe",
+        effect: { trust: 5, fame: 2, stress: -5 }
+      },
+      {
+        text: "敢想才有解！我保證就任半年內讓內科尖峰通勤時間縮短 30%，否則天天去內科指揮交通！",
+        tone: "豪邁宣誓", toneClass: "tone-bold",
+        effect: { trust: -2, fame: 7, stress: 15 },
+        createsPromise: "半年內讓內湖尖峰通勤縮減三成"
+      },
+      {
+        text: "根據大數據分析，內科進出旅次有 42% 來自外縣市，必須跨市與新北基隆聯防闢建快速公車專用道。",
+        tone: "區域聯防", toneClass: "tone-data",
+        effect: { trust: 4, fame: 3, stress: -2 }
+      },
+      {
+        text: "工程師們的抱怨我們每天都在看，被酸是應該的，因為市民已經等待太久太苦了。",
+        tone: "低頭受教", toneClass: "tone-warm",
+        effect: { trust: 3, fame: 4, stress: -3 }
+      }
+    ]
+  },
+  {
+    id: "q_safety_market",
+    reporter: { name: "林小狐", outlet: "都會早報", style: "尖銳批判型", tagClass: "tag-fox", charId: "char-fox" },
+    text: "上週士林老舊市場發生深夜火警，燒出建物消防安檢長期不及格的弊端，市府螺絲是否掉滿地？",
+    answers: [
+      {
+        text: "全面啟動全市 48 處公有老舊市場消防硬體升級，限期一個月內完成高風險管線抽換。",
+        tone: "立即行動", toneClass: "tone-safe",
+        effect: { trust: 5, fame: 3, stress: -5 }
+      },
+      {
+        text: "責任在現任市府團隊！換人做才能真正徹底剷除沉痾與官僚陋習！",
+        tone: "強烈攻防", toneClass: "tone-bold",
+        effect: { trust: -1, fame: 6, stress: 5 }
+      },
+      {
+        text: "台北市 30 年以上老市場佔比達 64%，單靠開罰無濟於事，須導入民間耐震補強與感測預警系統。",
+        tone: "制度治理", toneClass: "tone-data",
+        effect: { trust: 4, fame: 2, stress: -2 }
+      },
+      {
+        text: "我第一時間已探視受災攤商，攤商阿姨握著我的手掉淚，那一刻我深感公共安全的急迫與沉重。",
+        tone: "親民同理", toneClass: "tone-warm",
+        effect: { trust: 3, fame: 5, stress: -4 }
+      }
+    ]
+  },
+  {
+    id: "q_debate_challenge",
+    reporter: { name: "貓頭鷹博士", outlet: "公民事實查核", style: "檢驗型", tagClass: "tag-owl", charId: "char-owl" },
+    text: "對手陣營已公開邀請你下週舉辦公開辯論會，你敢正面迎戰，還是會以市政參訪為由閃避？",
+    answers: [
+      {
+        text: "隨時奉陪！只要主題聚焦在市民真正關心的市政藍圖，地點與形式我們全數配合。",
+        tone: "坦然接戰", toneClass: "tone-safe",
+        effect: { trust: 5, fame: 6, stress: 5 }
+      },
+      {
+        text: "請對手先把之前涉嫌圖利財團的爛帳說清楚，再來談辯論，我絕不受特定政治操作擺布！",
+        tone: "反嗆反擊", toneClass: "tone-bold",
+        effect: { trust: 1, fame: 7, stress: 8 }
+      },
+      {
+        text: "我們已依公辦辯論會法規提交意向書，一切交由中選會與第三方公信媒體籌辦。",
+        tone: "守規低調", toneClass: "tone-data",
+        effect: { trust: 3, fame: 1, stress: -5 }
+      },
+      {
+        text: "辯論不是吵架，而是向百萬市民報告台北未來的機會，我懷著謙卑的心期待這場對話。",
+        tone: "大格局訴求", toneClass: "tone-warm",
+        effect: { trust: 4, fame: 5, stress: -2 }
+      }
+    ]
+  }
+];
+
+/**
+ * 遊戲狀態管理器 (State Management)
+ */
+const GameState = {
+  trust: 51,
+  fame: 46,
+  stress: 20,
+  activePromises: [],
+  currentQuestionIndex: 0,
+  questionsQueue: [],
+  timerInterval: null,
+  timeLeft: 12,
+  audioEnabled: true,
+  reduceMotion: false,
+  apiKey: "",
+  apiEndpoint: "https://api.openai.com/v1"
+};
+
+/**
+ * Web Audio API 程式即時音效合成器 (Zero External Files)
+ */
+const SoundFX = {
+  ctx: null,
+
+  init() {
+    if (!this.ctx) {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioContext();
+    }
+  },
+
+  playFlash() {
+    if (!GameState.audioEnabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    // 白噪音模擬相機快門破風聲
+    const bufferSize = this.ctx.sampleRate * 0.12;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const whiteNoise = this.ctx.createBufferSource();
+    whiteNoise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(1000, now);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.6, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+
+    whiteNoise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    whiteNoise.start(now);
+  },
+
+  playBlip() {
+    if (!GameState.audioEnabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440 + Math.random() * 120, now);
+
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  },
+
+  playHeartbeat() {
+    if (!GameState.audioEnabled || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(75, now);
+    osc.frequency.exponentialRampToValueAtTime(35, now + 0.15);
+
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+};
+
+/**
+ * 閃光燈與第一人稱鏡頭特效
+ */
+function triggerCameraFlash() {
+  if (GameState.reduceMotion) return;
+  const overlay = document.getElementById('flash-overlay');
+  overlay.style.opacity = '0.85';
+  SoundFX.playFlash();
+  setTimeout(() => {
+    overlay.style.opacity = '0';
+  }, 90);
+
+  // 隨機鏡頭微晃
+  const rig = document.getElementById('camera-rig');
+  rig.classList.remove('camera-shake');
+  void rig.offsetWidth; // 觸發 reflow
+  rig.classList.add('camera-shake');
+}
+
+/**
+ * 打字機文字漸顯特效
+ */
+function runTypewriter(element, text, speed = 25, callback = null) {
+  element.innerHTML = '';
+  let index = 0;
+  const timer = setInterval(() => {
+    if (index < text.length) {
+      element.innerHTML += text.charAt(index);
+      if (index % 3 === 0) SoundFX.playBlip();
+      index++;
+    } else {
+      clearInterval(timer);
+      if (callback) callback();
+    }
+  }, speed);
+}
+
+/**
+ * 更新 HUD 數值與介面動畫
+ */
+function updateHUD() {
+  document.getElementById('stat-trust').innerText = Math.round(GameState.trust);
+  document.getElementById('stat-fame').innerText = Math.round(GameState.fame);
+  
+  const stressEl = document.getElementById('stat-stress');
+  stressEl.innerText = `${Math.min(100, Math.max(0, Math.round(GameState.stress)))}%`;
+  
+  if (GameState.stress > 60) {
+    stressEl.style.color = 'var(--alert-red)';
+  } else {
+    stressEl.style.color = 'var(--ink-dark)';
+  }
+}
+
+/**
+ * 開始並渲染指定題目
+ */
+function loadQuestion(questionObj) {
+  clearInterval(GameState.timerInterval);
+  GameState.timeLeft = 12;
+  
+  // 更新提問者識別與吉祥物活躍狀態
+  document.querySelectorAll('.reporter-character').forEach(el => el.classList.remove('active'));
+  const activeChar = document.getElementById(questionObj.reporter.charId);
+  if (activeChar) activeChar.classList.add('active');
+
+  const tagEl = document.getElementById('reporter-tag');
+  tagEl.innerText = `${questionObj.reporter.name} • ${questionObj.reporter.style}`;
+  tagEl.className = `reporter-tag ${questionObj.reporter.tagClass}`;
+
+  document.getElementById('question-index').innerText = `問題 ${GameState.currentQuestionIndex + 1} / ${GameState.questionsQueue.length}`;
+
+  // 檢查是否為追問題
+  const prefixEl = document.getElementById('question-prefix');
+  if (questionObj.isFollowUp) {
+    prefixEl.innerHTML = `<span class="followup-alert">🚨 緊咬追問</span>`;
+    triggerCameraFlash();
+  } else {
+    prefixEl.innerHTML = '';
+    // 正常提問閃光
+    setTimeout(triggerCameraFlash, 300);
+  }
+
+  // 啟動打字機文字
+  const qBody = document.getElementById('question-body');
+  runTypewriter(qBody, questionObj.text, 22, () => {
+    renderAnswerButtons(questionObj);
+    startTimer();
+  });
+}
+
+/**
+ * 渲染答題按鈕
+ */
+function renderAnswerButtons(questionObj) {
+  const container = document.getElementById('answers-grid');
+  container.innerHTML = '';
+
+  questionObj.answers.forEach((ans, idx) => {
+    const btn = document.createElement('button');
+    btn.className = 'answer-btn';
+    btn.innerHTML = `
+      <span>${ans.text}</span>
+      <span class="answer-tone ${ans.toneClass}">${ans.tone}</span>
+    `;
+    btn.onclick = () => handleAnswerSelected(ans, questionObj);
+    container.appendChild(btn);
+  });
+}
+
+/**
+ * 處理玩家選擇答案
+ */
+function handleAnswerSelected(answer, questionObj) {
+  clearInterval(GameState.timerInterval);
+  SoundFX.init();
+
+  // 結算數值
+  GameState.trust += answer.effect.trust || 0;
+  GameState.fame += answer.effect.fame || 0;
+  GameState.stress += answer.effect.stress || 0;
+  GameState.stress = Math.min(100, Math.max(0, GameState.stress));
+
+  // 檢查是否立下衝動支票
+  if (answer.createsPromise) {
+    GameState.activePromises.push({
+      text: answer.createsPromise,
+      questionId: questionObj.id,
+      day: 1
+    });
+    triggerCameraFlash();
+  }
+
+  updateHUD();
+
+  // 判斷是否引發「反咬追問」
+  if (questionObj.followUp && answer.createsPromise === questionObj.followUp.triggerPromise) {
+    const followUpQuestion = {
+      ...questionObj.followUp,
+      id: `${questionObj.id}_fu`,
+      isFollowUp: true
+    };
+    // 插入下一題
+    GameState.questionsQueue.splice(GameState.currentQuestionIndex + 1, 0, followUpQuestion);
+  }
+
+  // 前進下一題
+  GameState.currentQuestionIndex++;
+  if (GameState.currentQuestionIndex < GameState.questionsQueue.length) {
+    setTimeout(() => {
+      loadQuestion(GameState.questionsQueue[GameState.currentQuestionIndex]);
+    }, 400);
+  } else {
+    showSummaryModal();
+  }
+}
+
+/**
+ * 答題計時器
+ */
+function startTimer() {
+  const bar = document.getElementById('timer-bar');
+  const txt = document.getElementById('timer-text');
+  
+  bar.style.width = '100%';
+  bar.style.backgroundColor = 'var(--mint)';
+  txt.innerText = GameState.timeLeft;
+
+  GameState.timerInterval = setInterval(() => {
+    GameState.timeLeft--;
+    txt.innerText = GameState.timeLeft;
+    const pct = (GameState.timeLeft / 12) * 100;
+    bar.style.width = `${pct}%`;
+
+    // 緊張倒數提示
+    if (GameState.timeLeft <= 4) {
+      bar.style.backgroundColor = 'var(--alert-red)';
+      SoundFX.playHeartbeat();
+      if (!GameState.reduceMotion) {
+        document.getElementById('camera-rig').classList.add('camera-shake');
+        setTimeout(() => document.getElementById('camera-rig').classList.remove('camera-shake'), 200);
+      }
+    }
+
+    if (GameState.timeLeft <= 0) {
+      clearInterval(GameState.timerInterval);
+      // 超時未答視同結巴冷場
+      handleTimeout();
+    }
+  }, 1000);
+}
+
+/**
+ * 超時懲罰
+ */
+function handleTimeout() {
+  GameState.trust -= 4;
+  GameState.stress += 15;
+  updateHUD();
+  triggerCameraFlash();
+
+  const qBody = document.getElementById('question-body');
+  qBody.innerHTML = `<span style="color:var(--alert-red)">【語塞冷場】候選人神情慌張、支吾其詞，現場記者交頭接耳，閃光燈狂閃！</span>`;
+  document.getElementById('answers-grid').innerHTML = '';
+
+  setTimeout(() => {
+    GameState.currentQuestionIndex++;
+    if (GameState.currentQuestionIndex < GameState.questionsQueue.length) {
+      loadQuestion(GameState.questionsQueue[GameState.currentQuestionIndex]);
+    } else {
+      showSummaryModal();
+    }
+  }, 2000);
+}
+
+/**
+ * 彈窗管理
+ */
+function toggleModal(modalId, show) {
+  const modal = document.getElementById(modalId);
+  if (show) {
+    modal.classList.add('active');
+    if (modalId === 'modal-promises') renderPromisesList();
+  } else {
+    modal.classList.remove('active');
+  }
+}
+
+function renderPromisesList() {
+  const list = document.getElementById('promises-list');
+  list.innerHTML = '';
+  if (GameState.activePromises.length === 0) {
+    list.innerHTML = `<div style="text-align:center; color:#999; padding:20px 0;">目前發言極為謹慎，尚未立下任何空頭支票！👍</div>`;
+    return;
+  }
+  GameState.activePromises.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.style.cssText = 'background:#FFF; border:2px solid var(--ink-dark); border-radius:10px; padding:8px 12px; font-size:0.85rem; font-weight:700; display:flex; justify-content:space-between; align-items:center;';
+    item.innerHTML = `
+      <span>📌 ${p.text}</span>
+      <span class="ledger-badge">翻舊帳風險</span>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function saveSettings() {
+  GameState.audioEnabled = document.getElementById('cfg-audio').checked;
+  GameState.reduceMotion = document.getElementById('cfg-motion').checked;
+  const largeText = document.getElementById('cfg-large-text').checked;
+
+  document.body.classList.toggle('reduce-motion', GameState.reduceMotion);
+  document.documentElement.style.setProperty('--font-scale', largeText ? '1.15' : '1');
+
+  // 安全存儲 API Key 至 sessionStorage (不落實體磁碟)
+  const key = document.getElementById('cfg-apikey').value.trim();
+  const endpoint = document.getElementById('cfg-apiendpoint').value.trim();
+  if (key) sessionStorage.setItem('TAIPEI_LLM_KEY', key);
+  if (endpoint) sessionStorage.setItem('TAIPEI_LLM_ENDPOINT', endpoint);
+
+  toggleModal('modal-settings', false);
+}
+
+/**
+ * 記者會總結評價
+ */
+function showSummaryModal() {
+  clearInterval(GameState.timerInterval);
+  const modal = document.getElementById('modal-summary');
+  
+  let grade = 'B';
+  let badge = '🎖️';
+  let desc = '表現穩健，成功拆解大部分記者難題，雖無驚艷亮點但展現了可靠的市政默契。';
+
+  const score = GameState.trust + GameState.fame - (GameState.activePromises.length * 5);
+
+  if (score >= 110) {
+    grade = 'S 級神級應對'; badge = '👑';
+    desc = '論述兼具溫度與實質數據！台下記者掌聲不斷，晚間政論節目一面倒給予高度評價！';
+  } else if (score >= 95) {
+    grade = 'A 級沉穩獲勝'; badge = '🌟';
+    desc = '展現市長級高度，成功將爭議化為施政願景，民意信任感穩步上升。';
+  } else if (score < 80) {
+    grade = 'D 級重大公關災難'; badge = '💥';
+    desc = '開口支票過多且多次被記者緊咬矛盾，隔天各大頭條直指團隊準備不足！';
+  }
+
+  document.getElementById('summary-grade').innerText = `記者會總評：${grade}`;
+  document.getElementById('summary-badge').innerText = badge;
+  document.getElementById('summary-desc').innerText = desc;
+  document.getElementById('sum-trust').innerText = Math.round(GameState.trust);
+  document.getElementById('sum-fame').innerText = Math.round(GameState.fame);
+
+  toggleModal('modal-summary', true);
+}
+
+function restartPressConference() {
+  toggleModal('modal-summary', false);
+  GameState.trust = 51;
+  GameState.fame = 46;
+  GameState.stress = 20;
+  GameState.activePromises = [];
+  GameState.currentQuestionIndex = 0;
+  // 亂數挑選 5 題組成新輪次
+  GameState.questionsQueue = [...QUESTION_BANK].sort(() => 0.5 - Math.random()).slice(0, 5);
+  updateHUD();
+  loadQuestion(GameState.questionsQueue[0]);
+}
+
+// 綁定事件監聽
+document.getElementById('btn-promises').onclick = () => toggleModal('modal-promises', true);
+document.getElementById('btn-settings').onclick = () => toggleModal('modal-settings', true);
+
+// 頁面初次互動初始化音效 (相容瀏覽器 Autoplay Policy)
+window.addEventListener('click', () => SoundFX.init(), { once: true });
+window.addEventListener('touchstart', () => SoundFX.init(), { once: true });
+
+// 啟動開局
+window.addEventListener('DOMContentLoaded', () => {
+  restartPressConference();
+});
+</script>
+
+</body>
+</html>
